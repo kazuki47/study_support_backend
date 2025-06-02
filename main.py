@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import logging
 from flask_sqlalchemy import SQLAlchemy
+from flask import session
 import os
 from datetime  import datetime
 import pytz
@@ -71,18 +72,18 @@ def load_user(user_id):
 
 @app.route('/account/loginnow', methods=['GET'])
 def login_now():
-    
+     print("Session:", session)
      if current_user.is_authenticated:
-             # ← 修正
+        print(current_user.email)
         return jsonify({'msg': 'yes'}), 200
-            
+     print('not login')      
      return jsonify({'msg': 'no'}), 200       
 
 @app.route('/account/signup', methods=['POST'])
 def signup():
     data = request.get_json()
     username = data.get('name')
-    email = data.get('email')
+    email = data.get('mail')
     password = data.get('pas')
 
     user=User.query.filter_by(email=email).first() #メールアドレスが既に登録されているか確認
