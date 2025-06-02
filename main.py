@@ -1,0 +1,199 @@
+from flask import Flask, request, jsonify
+import requests
+import logging
+from flask_sqlalchemy import SQLAlchemy
+import os
+from datetime  import datetime
+import pytz
+from flask_cors import CORS# CORSを有効にするために必要 リクエストを許可するために必要
+from flask import render_template
+from flask_login import LoginManager, UserMixin,login_user,logout_user,login_required #login用
+from werkzeug.security import generate_password_hash, check_password_hash #login用ハッシュ
+from flask_login import current_user#セッションからユーザー情報を取得するために必要
+
+app = Flask(__name__)
+CORS(app, supports_credentials=True, origins=["http://localhost:3000"]) #CORSを有効にする.セッションを有効にするためにsupports_credentials=Trueを指定
+
+#login用
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'your-very-secret-key'  # 固定値に変更
+#ローカルのセッション
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = False  # ローカル開発時はFalse
+app.config['SESSION_COOKIE_NAME'] = 'session'
+db = SQLAlchemy(app)
+#設定
+
+#DB定義
+class Card(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    folder = db.Column(db.String(150), unique=True, nullable=False)
+    question = db.Column(db.String(150), nullable=False)
+    answer = db.Column(db.String(150), nullable=False)
+    ydata = db.Column(db.String(150), nullable=True)
+    date = db.Column(db.String(150), nullable=True)
+    created_at= db.Column(db.DateTime, nullable=False,default=datetime.now(pytz.timezone('Asia/Tokyo')))
+    def to_dict(self):
+            return {
+                
+            }
+
+#login用
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=False, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
+
+class Folder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    folder = db.Column(db.String(150),  nullable=False)
+    created_at= db.Column(db.DateTime, nullable=False,default=datetime.now(pytz.timezone('Asia/Tokyo')))
+
+class Time(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    date = db.Column(db.String(150),  nullable=False)
+    time = db.Column(db.String(150),  nullable=False)
+    created_at= db.Column(db.DateTime, nullable=False,default=datetime.now(pytz.timezone('Asia/Tokyo')))
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id)) #有効なセッションがある場合にユーザーを取得
+
+@app.route('/account/loginnow', methods=['GET'])
+def login_now():
+    
+     if current_user.is_authenticated:
+             # ← 修正
+        return jsonify({'msg': 'yes'}), 200
+            
+     return jsonify({'msg': 'no'}), 200       
+
+@app.route('/account/signup', methods=['POST'])
+def signup():
+    data = request.get_json()
+    username = data.get('name')
+    email = data.get('email')
+    password = data.get('pas')
+
+    user=User.query.filter_by(email=email).first() #メールアドレスが既に登録されているか確認
+    if user:
+        return jsonify({'msg': 'no'}), 400
+    # パスワードをハッシュ化
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+
+    new_user = User(email=email,username=username, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({'msg': 'ok'}), 201
+
+@app.route('/account/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    email = data.get('mail')
+    password = data.get('pas')
+
+    user = User.query.filter_by(email=email).first()
+
+    if user and check_password_hash(user.password, password): #check_password_hash(db.password, password):
+        # ログイン成功
+        login_user(user)  # Flask-Loginを使用してユーザーをログインさせる
+        return jsonify({'msg': 'ok'}), 200 #セッションも送られる
+    else:
+        # ログイン失敗
+        return jsonify({'msg': 'no'}), 401
+
+@app.route('/api/logout', methods=['GET'])
+@login_required #セッションが有効な場合のみアクセス可能
+def logout():
+    logout_user() # Flask-Loginを使用してユーザーをログアウトさせる
+
+@app.route('/timer', methods=['POST'])
+def time():
+    date= request.json.get('date')
+    time = request.json.get('time')
+    if current_user.is_authenticated:
+        email=current_user.email
+        time= Time(time=time,date=date,email=email)
+        db.session.add(time)
+        db.session.commit()
+        return jsonify({'msg': 'ok'}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+@app.route('/timer', methods=['GET'])
+def get_time():
+    if current_user.is_authenticated:
+        email=current_user.email
+        times = Time.query.filter_by(email=email).all()
+        timelist = []
+        datelist = []
+
+        for t in times:
+            timelist.append(t.time)
+            datelist.append(t.date)
+        
+        return jsonify({"time":timelist,"date":datelist}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/makecard', methods=['POST'])
+def create_card():
+    data = request.get_json()
+   
+    folder = data.get('folder')
+    question = data.get('question')
+    answer = data.get('answer')
+    email = current_user.email 
+    cardexists = Card.query.filter_by(email=email, folder=folder).first()
+    if cardexists:
+        return jsonify({'msg': 'exist'}), 200
+    card =Card(email=email, folder=folder, question=question, answer=answer)
+    db.session.add(card)
+    db.session.commit()
+
+    
+    return jsonify({'msg': 'ok'}), 201
+   
+
+@app.route('/learn/folder', methods=['POST'])
+def create_folder():
+    data = request.get_json()
+    folder = data.get('folder')
+    email = current_user.email
+    folderexists = Folder.query.filter_by(email=email, folder=folder).first()
+    if folderexists:
+        return jsonify({'msg': 'exist'}), 200
+    new_folder = Folder(email=email, folder=folder)
+    db.session.add(new_folder)
+    db.session.commit()
+    
+    return jsonify({'msg': 'ok'}), 201
+@app.route('/learn/getfolder', methods=['GET'])
+def get_folders():
+    if current_user.is_authenticated:
+        email = current_user.email
+        folders = Folder.query.filter_by(email=email).all()
+        folder_list = []
+        ids = []
+        for f in folders:
+            folder_list.append(f.folder)
+            ids.append(f.idr)
+            
+        return jsonify({'folder': folder_list,"id":ids}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+    

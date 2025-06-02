@@ -1,1 +1,7 @@
 Flask
+requests
+Flask-SQLAlchemy
+pytz
+Flask-Cors
+Flask-Login
+Werkzeug
