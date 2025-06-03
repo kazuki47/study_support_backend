@@ -34,8 +34,8 @@ db = SQLAlchemy(app)
 #DB定義
 class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(150), unique=True, nullable=False)
-    folder = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150),  nullable=False)
+    folder = db.Column(db.String(150),  nullable=False)
     question = db.Column(db.String(150), nullable=False)
     answer = db.Column(db.String(150), nullable=False)
     ydata = db.Column(db.String(150), nullable=True)
@@ -55,13 +55,13 @@ class User(UserMixin, db.Model):
 
 class Folder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150),  nullable=False)
     folder = db.Column(db.String(150),  nullable=False)
     created_at= db.Column(db.DateTime, nullable=False,default=datetime.now(pytz.timezone('Asia/Tokyo')))
 
 class Time(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150),  nullable=False)
     date = db.Column(db.String(150),  nullable=False)
     time = db.Column(db.String(150),  nullable=False)
     created_at= db.Column(db.DateTime, nullable=False,default=datetime.now(pytz.timezone('Asia/Tokyo')))
@@ -114,10 +114,12 @@ def login():
         # ログイン失敗
         return jsonify({'msg': 'no'}), 401
 
-@app.route('/api/logout', methods=['GET'])
+@app.route('/account/logout', methods=['GET'])
 @login_required #セッションが有効な場合のみアクセス可能
 def logout():
+    print("logout called")  # ログ出力
     logout_user() # Flask-Loginを使用してユーザーをログアウトさせる
+    return jsonify({'msg': 'ok'}), 200
 
 @app.route('/timer', methods=['POST'])
 def time():
@@ -151,11 +153,13 @@ def get_time():
 def create_card():
     data = request.get_json()
    
-    folder = data.get('folder')
+    fid = data.get('fid')
+    folder = Folder.query.filter_by(id=fid).first()
     question = data.get('question')
     answer = data.get('answer')
     email = current_user.email 
-    cardexists = Card.query.filter_by(email=email, folder=folder).first()
+    folder = folder.folder if folder else None  # フォルダが存在しない場合はNoneに設定
+    cardexists = Card.query.filter_by(email=email, folder=folder,question=question).first()
     if cardexists:
         return jsonify({'msg': 'exist'}), 200
     card =Card(email=email, folder=folder, question=question, answer=answer)
@@ -188,9 +192,29 @@ def get_folders():
         ids = []
         for f in folders:
             folder_list.append(f.folder)
-            ids.append(f.idr)
+            ids.append(f.id)
             
         return jsonify({'folder': folder_list,"id":ids}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/getall', methods=['POST'])
+def get_allcard():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('id')
+        folder = Folder.query.filter_by(id=id).first().folder
+        card = Card.query.filter_by(email=email, folder=folder).all()
+        card_question = []
+        card_answer = []
+        
+        ids = []
+        for c in card:
+            card_question.append(c.question)
+            ids.append(c.id)
+            card_answer.append(c.answer)
+            
+        return jsonify({'question': card_question,"answer":card_answer,"id":ids}), 200
     else:
         return jsonify({'msg': 'no'}), 200
 
