@@ -217,8 +217,66 @@ def get_allcard():
         return jsonify({'question': card_question,"answer":card_answer,"id":ids}), 200
     else:
         return jsonify({'msg': 'no'}), 200
+    
+#30件取得
+@app.route('/learn/get', methods=['POST'])
+def get_card30():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('id')
+        folder_obj = Folder.query.filter_by(id=id).first()
+        if not folder_obj:
+            return jsonify({'msg': 'folder not found'}), 404
+        folder = folder_obj.folder
+        cards = Card.query.filter_by(folder=folder, email=email).all()
+        today = datetime.now().strftime('%Y%m%d')
 
+        # フラグ付き比較関数
+        def sort_key(card):
+            is_empty = (not card.date or card.date == '') and (not card.ydata or card.ydata == '')
+            # is_emptyがTrueなら(0, ...)、Falseなら(1, ...)
+            return (0 if is_empty else 1, str(card.date or '') + str(card.ydata or '') + today)
 
+        # バブルソート
+        n = len(cards)
+        for i in range(n):
+            for j in range(0, n - i - 1):
+                if sort_key(cards[j]) > sort_key(cards[j + 1]):
+                    cards[j], cards[j + 1] = cards[j + 1], cards[j]
+        if len(cards) > 10:
+            cardre=cards[:10]
+        else:
+            cardre=cards
+        if cardre:
+            
+            return jsonify({
+                'question': [c.question for c in cardre],
+                'answer': [c.answer for c in cardre],
+                'id': [c.id for c in cardre]
+            }), 200
+        else:
+            return jsonify({'msg': 'no'}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/in', methods=['POST'])
+def card_in():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('card_id')
+        ydata = request.json.get('ydata')
+        date= datetime.now().strftime('%Y%m%d')
+        card = Card.query.filter_by(id=id, email=email).first()
+        if not card:
+            return jsonify({'msg': 'no'}), 200
+        card.ydata = ydata
+        card.date = date
+        db.session.commit()
+        return jsonify({'msg': 'ok'}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+        
+       
 if __name__ == '__main__':
     app.run(debug=True)
     
