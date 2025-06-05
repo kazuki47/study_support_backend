@@ -275,6 +275,56 @@ def card_in():
         return jsonify({'msg': 'ok'}), 200
     else:
         return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/delete', methods=['POST'])
+def delete_card():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('card_id')
+        card = Card.query.filter_by(id=id, email=email).first()
+        if not card:
+            return jsonify({'msg': 'no'}), 200
+        db.session.delete(card)
+        db.session.commit()
+        return jsonify({'msg': 'ok'}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/editcard', methods=['POST'])
+def edit_card():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('card_id')
+        question = request.json.get('afterq')
+        answer = request.json.get('aftera')
+        card = Card.query.filter_by(id=id, email=email).first()
+        if not card:
+            return jsonify({'msg': 'no'}), 200
+        card.question = question
+        card.answer = answer
+        db.session.commit()
+        return jsonify({'msg': 'ok'}), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+@app.route('/learn/getone', methods=['POST'])
+def get_one_card():
+    if current_user.is_authenticated:
+        email = current_user.email
+        id = request.json.get('card')
+        card = Card.query.filter_by(id=id, email=email).first()
+        card=card[0]
+        if not card[0]:
+            return jsonify({'msg': 'no'}), 200
+        return jsonify({
+            'question': card.question,
+            'answer': card.answer,
+            'id': card.id
+        }), 200
+    else:
+        return jsonify({'msg': 'no'}), 200
+    
+    
         
        
 if __name__ == '__main__':
