@@ -313,8 +313,8 @@ def get_one_card():
         email = current_user.email
         id = request.json.get('card')
         card = Card.query.filter_by(id=id, email=email).first()
-        card=card[0]
-        if not card[0]:
+        
+        if not card:
             return jsonify({'msg': 'no'}), 200
         return jsonify({
             'question': card.question,
